@@ -1,0 +1,3 @@
+conv_history.json
+*.pyc
+.env
