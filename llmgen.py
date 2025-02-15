@@ -70,7 +70,7 @@ def generate_document_outline(email_history: str, document_request: str):
             },
             {
                 'role': 'user',
-                'content': f"--- EMAIL HISTORY: ---\n{email_history}\n\n--- DOCUMENT DESCRIPTION ---\n{document_request}"
+                'content': f"--- EMAIL DRAFT: ---\n{email_history}\n\n--- DOCUMENT DESCRIPTION ---\n{document_request}"
             }
         ]
     )

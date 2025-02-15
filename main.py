@@ -135,8 +135,12 @@ Recipients: {", ".join(recipients)}
 Delay: {delay_seconds}
 Content:
 {content}
-Document descriptions: {"\n- ".join(document_descs or [])}""")
-
+Document descriptions: {"\n- ".join(document_descs)}""")
+            for doc in document_descs:
+                request_output = llmgen.generate_document_outline(content, doc).message.content
+                print(request_output)
+                texout = llmgen.generate_latex(request_output)
+                print(texout)
             # Log conversation in test DB
             db.log_conversation(conn, sender_email, "terminal_user", "Terminal Input", user_input, [], 0, content)
 
