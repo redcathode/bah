@@ -40,18 +40,6 @@ def main():
         print(f"Error: Missing configuration for: {', '.join(missing)}")
         return
 
-
-def validate_credentials(email_address, email_password, api_key):
-    missing = []
-    if not email_address: missing.append("EMAIL_ADDRESS")
-    if not email_password: missing.append("EMAIL_PASSWORD")
-    if not api_key: missing.append("OPENROUTER_API_KEY")
-
-    if missing:
-        print(f"Error: Missing configuration for: {', '.join(missing)}")
-        return False
-    return True
-
     # Connect to IMAP server
     imap = imaplib.IMAP4_SSL('imap.gmail.com')
     imap.login(email_address, email_password)
