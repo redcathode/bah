@@ -30,7 +30,7 @@ APO AA 28620- Card Number: 4007569285779574, Expiration Date: 06/27, CVV: 688
 
 
 # Scheduler configuration
-SCHEDULER_INTERVAL = 300  # 5 minutes between checks
+SCHEDULER_INTERVAL = 20  # 5 minutes between checks
 MAX_RETRIES = 3  # Maximum number of send retries for failed emails
 
 # Logging configuration
@@ -43,3 +43,7 @@ LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 CONVERSATION_HISTORY_FILE = "conversations.db"
 MAX_HISTORY_LENGTH = 512 * 1024 # appx. 512KB
+
+# Testing
+TEST_HISTORY_FILE = "test_conv.db"
+TEST_FAKE_EMAIL = "glorto@glorto.com"

@@ -123,7 +123,7 @@ if __name__ == '__main__':
     scheduler.add_job(
         main,
         'interval',
-        seconds=20,
+        seconds=config.SCHEDULER_INTERVAL,
         next_run_time=datetime.now()
     )
 

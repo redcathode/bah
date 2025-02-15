@@ -74,8 +74,6 @@ def fetch_email_by_index(imap, idx, addr, passwd, folder, num_tries=3):
             imap.select(folder)
 
 
-
-
 def process_email(msg):
     # Process email
     subject = msg['subject']
