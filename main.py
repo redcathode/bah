@@ -5,7 +5,6 @@ import threading
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from web.app import create_app
 from waitress import serve
 import sqlite3
 import imaplib
@@ -13,10 +12,10 @@ import email
 from email.utils import parseaddr
 
 # Import application modules
-from config import EMAIL_ADDRESS, EMAIL_PASSWORD, OPENROUTER_API_KEY, MAX_HISTORY_LENGTH
-from email_utils import fetch_emails, create_email_message, send_email, mark_email_as_read, validate_recipients
-from ai_utils import generate_ai_response, parse_ai_response
-from db import init_db, get_db_connection, log_scheduled_email, get_scheduled_emails, truncate_history
+import config
+import email_utils
+import ai_utils
+import db
 
 def main():
     """Main email processing logic"""
@@ -27,24 +26,36 @@ def main():
     args = parser.parse_args()
 
     # Load configuration from .env
-    email_address = os.getenv('EMAIL_ADDRESS') or EMAIL_ADDRESS
-    email_password = os.getenv('EMAIL_PASSWORD') or EMAIL_PASSWORD
-    api_key = os.getenv('OPENROUTER_API_KEY') or OPENROUTER_API_KEY
+    email_address = os.getenv('EMAIL_ADDRESS') or config.EMAIL_ADDRESS
+    email_password = os.getenv('EMAIL_PASSWORD') or config.EMAIL_PASSWORD
+    api_key = os.getenv('OPENROUTER_API_KEY') or config.OPENROUTER_API_KEY
 
     # Validate credentials
     missing = []
     if not email_address: missing.append("EMAIL_ADDRESS")
     if not email_password: missing.append("EMAIL_PASSWORD")
     if not api_key: missing.append("OPENROUTER_API_KEY")
-    
+
     if missing:
         print(f"Error: Missing configuration for: {', '.join(missing)}")
         return
 
+
+def validate_credentials(email_address, email_password, api_key):
+    missing = []
+    if not email_address: missing.append("EMAIL_ADDRESS")
+    if not email_password: missing.append("EMAIL_PASSWORD")
+    if not api_key: missing.append("OPENROUTER_API_KEY")
+
+    if missing:
+        print(f"Error: Missing configuration for: {', '.join(missing)}")
+        return False
+    return True
+
     # Connect to IMAP server
     imap = imaplib.IMAP4_SSL('imap.gmail.com')
     imap.login(email_address, email_password)
-    conn = get_db_connection()
+    conn = db.get_db_connection()
 
     for folder in ['INBOX', '[Gmail]/Spam']:
         try:
@@ -92,8 +103,8 @@ def main():
 
             # Generate AI response with conversation history
             prompt = f"From: {from_}\n{body}\n"
-            recipients, delay_seconds, content = parse_ai_response(
-                generate_ai_response(prompt, api_key, sender_email)
+            recipients, delay_seconds, content = ai_utils.parse_ai_response(
+                ai_utils.generate_ai_response(prompt, api_key, sender_email)
             )
 
             if "skip_send" in content.lower() or not from_:
@@ -114,7 +125,7 @@ def main():
                     content = input("Enter edited content: ")
 
             # Create and schedule email
-            mime_msg = create_email_message(
+            mime_msg = email_utils.create_email_message(
                 f"Re: {subject}",
                 recipients,
                 content,
@@ -127,13 +138,13 @@ def main():
             
             # Schedule and log email
             scheduler.add_job(
-                send_email,
+                email_utils.send_email,
                 'date',
                 run_date=scheduled_time,
                 args=[email_address, email_password, mime_msg],
                 id=job_id
             )
-            log_scheduled_email(job_id, email_address, recipients, content, scheduled_time)
+            db.log_scheduled_email(job_id, email_address, recipients, content, scheduled_time)
 
             # Mark as read and store history
             imap.store(num, '+FLAGS', '\\Seen')
@@ -155,43 +166,6 @@ def main():
     imap.logout()
     conn.close()
 
-def reschedule_pending_emails(scheduler, email_address_param, email_password_param):
-    """Reschedule pending emails from the database on startup."""
-    print("Rescheduling pending emails...")
-    scheduled_emails = get_scheduled_emails()
-    for scheduled_email in scheduled_emails:
-        job_id = scheduled_email['id']
-        recipients = scheduled_email['recipients'].split(', ')
-        content = scheduled_email['content']
-        scheduled_time = datetime.fromisoformat(scheduled_email['scheduled_time'])
-
-        if scheduled_time > datetime.now():
-            print(f"Rescheduling email job {job_id} for {scheduled_time}")
-            scheduler.add_job(
-                send_email,
-                'date',
-                run_date=scheduled_time,
-                args=[email_address_param, email_password_param, create_email_message(
-                    "Re: [Rescheduled]", # Subject will be overridden by AI response logic, adding a placeholder
-                    recipients,
-                    content,
-                    sender_email=email_address_param
-                )],
-                id=job_id
-            )
-        else:
-            print(f"Scheduled time for job {job_id} is in the past. Sending immediately.")
-            send_email(
-                email_address_param,
-                email_password_param,
-                create_email_message(
-                    "Re: [Past Scheduled Email]",
-                    recipients,
-                    content,
-                    sender_email=email_address_param
-                )
-            )
-
 
 if __name__ == '__main__':
     load_dotenv()
@@ -199,20 +173,13 @@ if __name__ == '__main__':
     # Initialize scheduler and database
     scheduler = BackgroundScheduler()
     scheduler.start()
-    init_db()
+    db.init_db()
     # Get credentials from environment variables or config
     email_address = os.getenv('EMAIL_ADDRESS') or EMAIL_ADDRESS
     email_password = os.getenv('EMAIL_PASSWORD') or EMAIL_PASSWORD
     #reschedule_pending_emails(scheduler, email_address, email_password)
 
     # Create and start Flask app in a separate thread
-    app = create_app(scheduler)
-    flask_thread = threading.Thread(
-        target=lambda: serve(app, host='0.0.0.0', port=5000),
-        daemon=True
-    )
-    print("Starting Flask app...") # Add print statement
-    flask_thread.start()
 
     # Schedule email checks every 5 minutes
     scheduler.add_job(
