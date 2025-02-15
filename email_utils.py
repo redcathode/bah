@@ -59,6 +59,7 @@ def validate_recipients(recipients):
     return valid_recipients
 
 def fetch_email_by_index(imap, idx, addr, passwd, folder, num_tries=3):
+    imap.select(folder)
     for attempt in range(num_tries):
         try:
             _, data = imap.fetch(idx, '(RFC822)')

@@ -3,7 +3,8 @@ import config
 
 def init_db():
     """Initialize SQLite database and tables"""
-    with sqlite3.connect(config.CONVERSATION_HISTORY_FILE) as conn:
+    db_file = config.TEST_HISTORY_FILE if config.TESTING else config.CONVERSATION_HISTORY_FILE
+    with sqlite3.connect(db_file) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS conversations
                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
                       sender_email TEXT NOT NULL,
@@ -15,8 +16,9 @@ def init_db():
 
 def get_db_connection():
     """Get thread-safe database connection"""
+    db_file = config.TEST_HISTORY_FILE if config.TESTING else config.CONVERSATION_HISTORY_FILE
     try:
-        conn = sqlite3.connect(config.CONVERSATION_HISTORY_FILE, check_same_thread=False)
+        conn = sqlite3.connect(db_file, check_same_thread=False)
         # Test the connection
         conn.execute("SELECT 1")
         return conn

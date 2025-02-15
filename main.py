@@ -14,7 +14,7 @@ from email.utils import parseaddr
 # Import application modules
 import config
 import email_utils
-import ai_utils
+import llmgen
 import db
 
 def load_credentials():
@@ -38,6 +38,7 @@ def load_credentials():
 
 def main():
     """Main email processing logic"""
+
     try:
         email_address, email_password, api_key = load_credentials()
     except ValueError as e:
@@ -70,14 +71,14 @@ def main():
 
             # Generate AI response with conversation history
             prompt = f"From: {from_}\n{body}\n"
-            ai_response = ai_utils.generate_ai_response(prompt, api_key, sender_email)
+            recipients, delay_seconds, content, document_descs, skip = llmgen.get_email_draft(sender_email, prompt)
             
-            if "skip_send" in ai_response.lower() or not from_:
+            if skip:
                 imap.store(num, '+FLAGS', '\\Seen')
                 print(f"Skipped reply to {from_}")
                 continue
 
-            recipients, delay_seconds, content = ai_utils.parse_ai_response(ai_response)
+            # recipients, delay_seconds, content = ai_utils.parse_ai_response(ai_response)
             # Create and schedule email
             mime_msg = email_utils.create_email_message(
                 f"Re: {subject}",
@@ -113,11 +114,38 @@ def main():
 
 if __name__ == '__main__':
     load_dotenv()
+    db.init_db()
+
+    if config.TESTING:
+        print("Testing mode enabled. Conversing in terminal...")
+        api_key = os.getenv('OPENROUTER_API_KEY')
+
+        sender_email = config.TEST_FAKE_EMAIL
+        conn = db.get_db_connection()
+
+        while True:
+            user_input = input("You: ")
+            if user_input.lower() == 'exit':
+                break
+
+            prompt = f"From: terminal_user\n{user_input}\n"
+            recipients, delay_seconds, content, document_descs, skip = llmgen.get_email_draft(sender_email, prompt)
+            print(f"""Skip: {skip}
+Recipients: {", ".join(recipients)}
+Delay: {delay_seconds}
+Content:
+{content}
+Document descriptions: {"\n- ".join(document_descs or [])}""")
+
+            # Log conversation in test DB
+            db.log_conversation(conn, sender_email, "terminal_user", "Terminal Input", user_input, [], 0, content)
+
+        conn.close()
     
     # Initialize scheduler and database
     scheduler = BackgroundScheduler()
     scheduler.start()
-    db.init_db()
+ 
 
     # Schedule email checks every 5 minutes
     scheduler.add_job(
