@@ -95,10 +95,10 @@ def generate_latex(outline: str):
     return response.message.content
 
 if __name__ == "__main__":
-    structured_email = get_email_draft_structured(cfg.EXAMPLE_EMAIL)
+    structured_email = get_email_draft(config.EXAMPLE_EMAIL)
     print(f"Recipients:{structured_email.email_recipients}\nBody:\n{structured_email.email_body}\nDocument Descriptions: {structured_email.descriptions_of_attached_documents}")
     for doc in structured_email.descriptions_of_attached_documents or []:
-        request_output = generate_document_outline(cfg.EXAMPLE_EMAIL + structured_email.email_body, doc).message.content
+        request_output = generate_document_outline(config.EXAMPLE_EMAIL + structured_email.email_body, doc).message.content
         print(request_output)
         texout = generate_latex(request_output)
         print(texout)

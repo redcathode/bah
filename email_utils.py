@@ -7,20 +7,44 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.utils import parseaddr
 import os
+import base64
 
 
 # In email_utils.py, modify create_email_message function:
-def create_email_message(subject, recipients, content, sender_email=None, in_reply_to_message_id=None): # Add in_reply_to_message_id parameter
+def create_email_message(subject, recipients, content, pdf_paths=None, sender_email=None, in_reply_to_message_id=None):
     """Creates a MIME message, optionally with PDF attachments and In-Reply-To header."""
-    mime_msg = MIMEText(content)
+    if pdf_paths:
+        mime_msg = MIMEMultipart()
+        mime_msg['Subject'] = subject
+        mime_msg['From'] = sender_email
+        mime_msg['To'] = ', '.join(recipients)
 
-    mime_msg['Subject'] = subject
-    mime_msg['From'] = sender_email
-    mime_msg['To'] = ', '.join(recipients)
+        # Attach the message body
+        mime_msg.attach(MIMEText(content, 'plain'))
 
-    if in_reply_to_message_id: # Add In-Reply-To header if message ID is provided
-        mime_msg['In-Reply-To'] = in_reply_to_message_id
-        mime_msg['References'] = in_reply_to_message_id # Optional: Also set References for better threading
+        # Attach the PDF files
+        for pdf_path in pdf_paths:
+            try:
+                with open(pdf_path, 'rb') as pdf_file:
+                    pdf_data = pdf_file.read()
+                pdf_attachment = MIMEApplication(pdf_data, _subtype="pdf")
+                pdf_attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(pdf_path))
+                mime_msg.attach(pdf_attachment)
+            except Exception as e:
+                print(f"Error attaching PDF {pdf_path}: {e}")
+
+        if in_reply_to_message_id: # Add In-Reply-To header if message ID is provided
+            mime_msg['In-Reply-To'] = in_reply_to_message_id
+            mime_msg['References'] = in_reply_to_message_id # Optional: Also set References for better threading
+    else:
+        mime_msg = MIMEText(content)
+        mime_msg['Subject'] = subject
+        mime_msg['From'] = sender_email
+        mime_msg['To'] = ', '.join(recipients)
+
+        if in_reply_to_message_id: # Add In-Reply-To header if message ID is provided
+            mime_msg['In-Reply-To'] = in_reply_to_message_id
+            mime_msg['References'] = in_reply_to_message_id # Optional: Also set References for better threading
 
     return mime_msg
 

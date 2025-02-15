@@ -81,10 +81,20 @@ def main():
 
             # recipients, delay_seconds, content = ai_utils.parse_ai_response(ai_response)
             # Create and schedule email
+            # Generate PDF attachments
+            pdf_paths = []
+            for doc in document_descs:
+                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc).message.content)
+                if request_output.strip().startswith("```latex"):
+                    request_output = request_output.strip().split("```latex")[1].split("```")[0]
+                pdf_path = latex_utils.create_pdf_from_latex_string(request_output)
+                pdf_paths.append(pdf_path)
+
             mime_msg = email_utils.create_email_message(
                 f"Re: {subject}",
                 recipients,
                 content,
+                pdf_paths=pdf_paths,
                 sender_email=email_address,
                 in_reply_to_message_id=message_id
             )
@@ -108,7 +118,7 @@ def main():
             imap.close()
 
     try:
-        imap.logout()
+        imap.logout() # Logout outside the loop
     finally:
         conn.close()
 

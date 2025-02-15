@@ -1,5 +1,6 @@
 from faker import Faker
 import random
+from datetime import datetime
 
 def generate_llm_prompt():
     fake = Faker()
@@ -27,6 +28,7 @@ def generate_llm_prompt():
     prompt += f"- SWIFT Code, if a transaction is taking place: {fake.swift()}\n"
     prompt += f"- Social Security Number: {fake.ssn()}\n"
     prompt += f"- Package Tracking Number: {tracking_number}"
+    prompt += f"\nCurrent date and time: {str(datetime.now())}"
     
     return prompt
 
