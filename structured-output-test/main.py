@@ -11,9 +11,6 @@ class EmailDraft(BaseModel):
     descriptions_of_attached_documents: Optional[List[str]] = Field(description="Array of descriptions of attached documents - anything you specify here will be used to generate a document that will then be attached to your email", default_factory=list)
     # descriptions_of_attached_images: Optional[List[str]] = Field(description="Array of descriptions of attached images - anything you specify here will be used to generate an image that will then be attached to your email", default_factory=list)
 
-class LatexResponse(BaseModel):
-    document_filename: str = Field(description="Filename of the document to be generated")
-    latex: str = Field(description="LaTeX to be compiled")
 
 def get_email_draft_structured(user_prompt: str) -> EmailDraft:
     """
@@ -62,6 +59,7 @@ def generate_document_outline(email_history: str, document_request: str):
     )
 
     return response
+
 
 def generate_latex(outline: str):
     response = chat(
