@@ -21,9 +21,9 @@ def load_credentials():
     load_dotenv()
 
     # Load configuration from .env
-    email_address = os.getenv('EMAIL_ADDRESS') or config.EMAIL_ADDRESS
-    email_password = os.getenv('EMAIL_PASSWORD') or config.EMAIL_PASSWORD
-    api_key = os.getenv('OPENROUTER_API_KEY') or config.OPENROUTER_API_KEY
+    email_address = os.getenv('EMAIL_ADDRESS')
+    email_password = os.getenv('EMAIL_PASSWORD')
+    api_key = os.getenv('OPENROUTER_API_KEY')
 
     # Validate credentials
     missing = []
@@ -68,6 +68,7 @@ def main():
             # Generate AI response with conversation history
             prompt = f"From: {from_}\n{body}\n"
             ai_response = ai_utils.generate_ai_response(prompt, api_key, sender_email)
+            
             if "skip_send" in ai_response.lower() or not from_:
                 imap.store(num, '+FLAGS', '\\Seen')
                 print(f"Skipped reply to {from_}")
@@ -126,8 +127,6 @@ if __name__ == '__main__':
     email_address = os.getenv('EMAIL_ADDRESS') or config.EMAIL_ADDRESS
     email_password = os.getenv('EMAIL_PASSWORD') or config.EMAIL_PASSWORD
     #reschedule_pending_emails(scheduler, email_address, email_password)
-
-    # Create and start Flask app in a separate thread
 
     # Schedule email checks every 5 minutes
     scheduler.add_job(

@@ -28,9 +28,6 @@ APO AA 28620- Card Number: 4007569285779574, Expiration Date: 06/27, CVV: 688
 - Social Security Number: 893-59-1825
 - Package Tracking Number: 0075484182888925"""
 
-EMAIL_ADDRESS = None  # These 3 will be loaded from .env if not specified here
-EMAIL_PASSWORD = None
-OPENROUTER_API_KEY = None
 
 # Scheduler configuration
 SCHEDULER_INTERVAL = 300  # 5 minutes between checks
@@ -44,5 +41,5 @@ LOG_MAX_SIZE = 5 * 1024 * 1024  # 5MB
 LOG_BACKUP_COUNT = 3
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
-CONVERSATION_HISTORY_FILE = "conv_history.json"
+CONVERSATION_HISTORY_FILE = "conversations.db"
 MAX_HISTORY_LENGTH = 512 * 1024 # appx. 512KB
