@@ -16,6 +16,7 @@ import config
 import email_utils
 import llmgen
 import db
+import latex_utils
 
 def load_credentials():
     load_dotenv()
@@ -137,10 +138,10 @@ Content:
 {content}
 Document descriptions: {"\n- ".join(document_descs)}""")
             for doc in document_descs:
-                request_output = llmgen.generate_document_outline(content, doc).message.content
-                print(request_output)
-                texout = llmgen.generate_latex(request_output)
-                print(texout)
+                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc).message.content)
+                if request_output.strip().startswith("```latex"):
+                    request_output = request_output.strip().split("```latex")[1].split("```")[0]
+                print(latex_utils.create_pdf_from_latex_string(request_output))
             # Log conversation in test DB
             db.log_conversation(conn, sender_email, "terminal_user", "Terminal Input", user_input, [], 0, content)
 
