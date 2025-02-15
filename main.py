@@ -32,14 +32,17 @@ def load_credentials():
     if not api_key: missing.append("OPENROUTER_API_KEY")
 
     if missing:
-        print(f"Error: Missing configuration for: {', '.join(missing)}")
-        exit(1) # sort of a TODO
+        raise ValueError(f"Missing configuration for: {', '.join(missing)}")
 
     return email_address, email_password, api_key
 
 def main():
     """Main email processing logic"""
-    email_address, email_password, api_key = load_credentials()
+    try:
+        email_address, email_password, api_key = load_credentials()
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        return
 
     # Connect to IMAP server
     imap = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -100,11 +103,12 @@ def main():
             db.log_conversation(conn, sender_email, from_, subject, body, recipients, delay_seconds, content)
 
             print(f"Scheduled response to {from_} in {delay_seconds} seconds")
+            imap.close()
 
-        imap.close()
-
-    imap.logout()
-    conn.close()
+    try:
+        imap.logout()
+    finally:
+        conn.close()
 
 
 if __name__ == '__main__':
@@ -119,7 +123,7 @@ if __name__ == '__main__':
     scheduler.add_job(
         main,
         'interval',
-        minutes=1,
+        seconds=20,
         next_run_time=datetime.now()
     )
 
