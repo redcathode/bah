@@ -7,6 +7,7 @@ import json
 class EmailDraft(BaseModel):
     should_skip_sending_email: bool = Field(description="Boolean indicating whether to skip sending an email")
     email_recipients: List[str] = Field(description="Who this email is to (this is usually just whoever sent the email to you)")
+    email_delay: int = Field(description="Amount of time to delay sending the email, in seconds, as an integer (this is usually less than 120 and more than 20)")
     email_body: str = Field(description="Body of the email")
     descriptions_of_attached_documents: Optional[List[str]] = Field(description="Array of descriptions of attached documents - anything you specify here will be used to generate a document that will then be attached to your email", default_factory=list)
     # descriptions_of_attached_images: Optional[List[str]] = Field(description="Array of descriptions of attached images - anything you specify here will be used to generate an image that will then be attached to your email", default_factory=list)

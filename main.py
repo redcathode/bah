@@ -97,15 +97,7 @@ def main():
             )
             # Mark as read and store history
             imap.store(num, '+FLAGS', '\\Seen')
-            conn.execute(
-                "INSERT INTO conversations (sender_email, role, content) VALUES (?, ?, ?)",
-                (sender_email, 'user', f"From: {from_}\nSubject: {subject}\n{body}")
-            )
-            conn.execute(
-                "INSERT INTO conversations (sender_email, role, content) VALUES (?, ?, ?)",
-                (sender_email, 'assistant', f"To: {', '.join(recipients)}\nDelay: {delay_seconds}\n{content}")
-            )
-            conn.commit()
+            db.log_conversation(conn, sender_email, from_, subject, body, recipients, delay_seconds, content)
 
             print(f"Scheduled response to {from_} in {delay_seconds} seconds")
 

@@ -25,7 +25,6 @@ def get_db_connection():
         raise
 
 
-
 def get_history_by_email(sender_email):
     """Gets conversation history for a given email"""
     with get_db_connection() as conn:
@@ -44,3 +43,15 @@ def get_history_by_email(sender_email):
         except Exception as e:
             print(f"Error truncating history: {str(e)}")
             return []
+
+def log_conversation(conn, sender_email, from_, subject, body, recipients, delay_seconds, content):
+    """Logs the conversation to the database."""
+    conn.execute(
+        "INSERT INTO conversations (sender_email, role, content) VALUES (?, ?, ?)",
+        (sender_email, 'user', f"From: {from_}\nSubject: {subject}\n{body}")
+    )
+    conn.execute(
+        "INSERT INTO conversations (sender_email, role, content) VALUES (?, ?, ?)",
+        (sender_email, 'assistant', f"To: {', '.join(recipients)}\nDelay: {delay_seconds}\n{content}")
+    )
+    conn.commit()
