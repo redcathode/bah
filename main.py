@@ -101,9 +101,8 @@ def main():
 
             print(f"Scheduled response to {from_} in {delay_seconds} seconds")
 
-
-
         imap.close()
+
     imap.logout()
     conn.close()
 
@@ -115,10 +114,6 @@ if __name__ == '__main__':
     scheduler = BackgroundScheduler()
     scheduler.start()
     db.init_db()
-    # Get credentials from environment variables or config
-    email_address = os.getenv('EMAIL_ADDRESS') or config.EMAIL_ADDRESS
-    email_password = os.getenv('EMAIL_PASSWORD') or config.EMAIL_PASSWORD
-    #reschedule_pending_emails(scheduler, email_address, email_password)
 
     # Schedule email checks every 5 minutes
     scheduler.add_job(
