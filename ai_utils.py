@@ -1,10 +1,10 @@
 import openai
 from config import SYSTEM_PROMPT
-from db import truncate_history
+from db import get_history_by_email
 
 def format_conversation_history(sender_email):
     """Formats conversation history for AI context as list of messages."""
-    history = truncate_history(sender_email, 32)
+    history = get_history_by_email(sender_email, 32)
     formatted_messages = []
 
     for message in history[-12:]:  # Consider last 12 messages (or less if history is shorter)

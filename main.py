@@ -17,13 +17,8 @@ import email_utils
 import ai_utils
 import db
 
-def main():
-    """Main email processing logic"""
+def load_credentials():
     load_dotenv()
-    
-    parser = argparse.ArgumentParser(description='AI Email Autoresponder')
-    parser.add_argument('--review', action='store_true', help='Review responses before sending')
-    args = parser.parse_args()
 
     # Load configuration from .env
     email_address = os.getenv('EMAIL_ADDRESS') or config.EMAIL_ADDRESS
@@ -38,7 +33,13 @@ def main():
 
     if missing:
         print(f"Error: Missing configuration for: {', '.join(missing)}")
-        return
+        exit(1) # sort of a TODO
+
+    return email_address, email_password, api_key
+
+def main():
+    """Main email processing logic"""
+    email_address, email_password, api_key = load_credentials()
 
     # Connect to IMAP server
     imap = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -60,58 +61,19 @@ def main():
 
         for num in message_nums[0].split():
             # Fetch email with retries
-            for attempt in range(3):
-                try:
-                    _, data = imap.fetch(num, '(RFC822)')
-                    msg = email.message_from_bytes(data[0][1])
-                    break
-                except imaplib.IMAP4.abort:
-                    if attempt == 2:
-                        raise
-                    print("IMAP connection lost, reconnecting...")
-                    imap.logout()
-                    imap = imaplib.IMAP4_SSL('imap.gmail.com')
-                    imap.login(email_address, email_password)
-                    imap.select(folder)
+            msg = email_utils.fetch_email_by_index(imap, num, email_address, email_password, folder)
             
-            # Process email
-            subject = msg['subject']
-            from_ = msg['from']
-            body = ''
-            sender_email = parseaddr(from_)[1]
-            message_id = msg.get('Message-ID')
-
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == 'text/plain':
-                        body = part.get_payload(decode=True).decode(errors='ignore')
-                        break
-            else:
-                body = msg.get_payload(decode=True).decode(errors='ignore')
+            subject, from_, body, sender_email, message_id = email_utils.process_email(msg)
 
             # Generate AI response with conversation history
             prompt = f"From: {from_}\n{body}\n"
-            recipients, delay_seconds, content = ai_utils.parse_ai_response(
-                ai_utils.generate_ai_response(prompt, api_key, sender_email)
-            )
-
-            if "skip_send" in content.lower() or not from_:
+            ai_response = ai_utils.generate_ai_response(prompt, api_key, sender_email)
+            if "skip_send" in ai_response.lower() or not from_:
                 imap.store(num, '+FLAGS', '\\Seen')
                 print(f"Skipped reply to {from_}")
                 continue
 
-            # User review logic
-            if args.review:
-                print(f"\nTo: {recipients}")
-                print(f"Subject: Re: {subject}")
-                print(f"\n{content}\n")
-                choice = input("Send this response? (y/n/edit) ").lower()
-                if choice == 'n':
-                    imap.store(num, '+FLAGS', '\\Seen')
-                    continue
-                elif choice == 'edit':
-                    content = input("Enter edited content: ")
-
+            recipients, delay_seconds, content = ai_utils.parse_ai_response(ai_response)
             # Create and schedule email
             mime_msg = email_utils.create_email_message(
                 f"Re: {subject}",
@@ -132,8 +94,6 @@ def main():
                 args=[email_address, email_password, mime_msg],
                 id=job_id
             )
-            db.log_scheduled_email(job_id, email_address, recipients, content, scheduled_time)
-
             # Mark as read and store history
             imap.store(num, '+FLAGS', '\\Seen')
             conn.execute(
@@ -163,8 +123,8 @@ if __name__ == '__main__':
     scheduler.start()
     db.init_db()
     # Get credentials from environment variables or config
-    email_address = os.getenv('EMAIL_ADDRESS') or EMAIL_ADDRESS
-    email_password = os.getenv('EMAIL_PASSWORD') or EMAIL_PASSWORD
+    email_address = os.getenv('EMAIL_ADDRESS') or config.EMAIL_ADDRESS
+    email_password = os.getenv('EMAIL_PASSWORD') or config.EMAIL_PASSWORD
     #reschedule_pending_emails(scheduler, email_address, email_password)
 
     # Create and start Flask app in a separate thread

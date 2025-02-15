@@ -8,21 +8,6 @@ from email.mime.application import MIMEApplication
 from email.utils import parseaddr
 import os
 
-def fetch_emails(email_address, email_password, folders=['INBOX', '[Gmail]/Spam']):
-    """Fetches unread emails from specified IMAP folders."""
-    imap = imaplib.IMAP4_SSL('imap.gmail.com')
-    imap.login(email_address, email_password)
-    messages = []
-    for folder in folders:
-        imap.select(folder)
-        _, message_nums = imap.search(None, 'UNSEEN')
-        for num in message_nums[0].split():
-            _, data = imap.fetch(num, '(RFC822)')
-            msg = email.message_from_bytes(data[0][1])
-            messages.append((num, msg, folder)) # Include folder info for later use if needed
-    imap.close()
-    imap.logout()
-    return messages
 
 # In email_utils.py, modify create_email_message function:
 def create_email_message(subject, recipients, content, sender_email=None, in_reply_to_message_id=None): # Add in_reply_to_message_id parameter
@@ -72,3 +57,39 @@ def validate_recipients(recipients):
         if '@' in parsed:
             valid_recipients.append(parsed)
     return valid_recipients
+
+def fetch_email_by_index(imap, idx, addr, passwd, folder, num_tries=3):
+    for attempt in range(num_tries):
+        try:
+            _, data = imap.fetch(idx, '(RFC822)')
+            msg = email.message_from_bytes(data[0][1])
+            return msg
+        except imaplib.IMAP4.abort:
+            if attempt == num_tries - 1:
+                raise
+            print("IMAP connection lost, reconnecting...")
+            imap.logout()
+            imap = imaplib.IMAP4_SSL('imap.gmail.com')
+            imap.login(addr, passwd)
+            imap.select(folder)
+
+
+
+
+def process_email(msg):
+    # Process email
+    subject = msg['subject']
+    from_ = msg['from']
+    body = ''
+    sender_email = parseaddr(from_)[1]
+    message_id = msg.get('Message-ID')
+
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == 'text/plain':
+                body = part.get_payload(decode=True).decode(errors='ignore')
+                break
+    else:
+        body = msg.get_payload(decode=True).decode(errors='ignore')
+
+    return subject, from_, body, sender_email, message_id
