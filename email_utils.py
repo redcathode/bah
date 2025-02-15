@@ -39,12 +39,26 @@ def create_email_message(subject, recipients, content, sender_email=None, in_rep
 
     return mime_msg
 
-def send_email(email_address, email_password, mime_msg):
-    """Sends an email using SMTP."""
-    smtp = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-    smtp.login(email_address, email_password)
-    smtp.send_message(mime_msg)
-    smtp.quit()
+def send_email(email_address, email_password, msg):
+    """Send email using SMTP with error handling and retries"""
+    if not email_address or not email_password:
+        raise ValueError("Missing email credentials - check EMAIL_ADDRESS/EMAIL_PASSWORD in config")
+        
+    try:
+        smtp = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        smtp.login(email_address, email_password)
+        smtp.send_message(msg)
+        print(f"Successfully sent email to {msg['To']}")
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"SMTP Authentication failed: {str(e)}")
+        raise
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")
+        raise
+    finally:
+        try:
+            smtp.quit()
+        except: pass
 
 def mark_email_as_read(imap_connection, message_num):
     """Marks an email as read on the IMAP server."""

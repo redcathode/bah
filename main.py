@@ -1,34 +1,27 @@
-# main.py
 import argparse
 import os
-import email
-import imaplib
-import json
+import time
+import threading
+from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-
-from config import EMAIL_ADDRESS, EMAIL_PASSWORD, OPENROUTER_API_KEY, CONVERSATION_HISTORY_FILE, MAX_HISTORY_LENGTH
-from email_utils import fetch_emails, create_email_message, send_email, mark_email_as_read, validate_recipients
+from web.app import create_app
+from waitress import serve
+import sqlite3
+import imaplib
+import email
 from email.utils import parseaddr
+
+# Import application modules
+from config import EMAIL_ADDRESS, EMAIL_PASSWORD, OPENROUTER_API_KEY, MAX_HISTORY_LENGTH
+from email_utils import fetch_emails, create_email_message, send_email, mark_email_as_read, validate_recipients
 from ai_utils import generate_ai_response, parse_ai_response
-
-
-# In main.py, add this function:
-def truncate_history(history_list, max_length):
-    """Truncates a list of history turns to a maximum character length."""
-    total_length = 0
-    truncated_history = []
-    for turn in reversed(history_list): # Process from the end (most recent)
-        turn_length = len(turn['content'])
-        if total_length + turn_length <= max_length:
-            truncated_history.insert(0, turn) # Insert at beginning to maintain order
-            total_length += turn_length
-        else:
-            break # Stop adding older turns
-    return truncated_history
+from db import init_db, get_db_connection, log_scheduled_email, get_scheduled_emails, truncate_history
 
 def main():
+    """Main email processing logic"""
     load_dotenv()
-
+    
     parser = argparse.ArgumentParser(description='AI Email Autoresponder')
     parser.add_argument('--review', action='store_true', help='Review responses before sending')
     args = parser.parse_args()
@@ -38,53 +31,56 @@ def main():
     email_password = os.getenv('EMAIL_PASSWORD') or EMAIL_PASSWORD
     api_key = os.getenv('OPENROUTER_API_KEY') or OPENROUTER_API_KEY
 
-    if not email_address or not email_password or not api_key:
-        print("Error: Email credentials or API key not configured in .env or config.py")
+    # Validate credentials
+    missing = []
+    if not email_address: missing.append("EMAIL_ADDRESS")
+    if not email_password: missing.append("EMAIL_PASSWORD")
+    if not api_key: missing.append("OPENROUTER_API_KEY")
+    
+    if missing:
+        print(f"Error: Missing configuration for: {', '.join(missing)}")
         return
-    
-          
-    # In main.py, inside the main() function, before the IMAP connection:
-    conversation_history = {}
-    try:
-        with open(CONVERSATION_HISTORY_FILE, 'r') as f:
-            conversation_history = json.load(f)
-    except FileNotFoundError:
-        conversation_history = {} # Start with an empty history if file not found
-
-    
 
     # Connect to IMAP server
     imap = imaplib.IMAP4_SSL('imap.gmail.com')
     imap.login(email_address, email_password)
+    conn = get_db_connection()
 
     for folder in ['INBOX', '[Gmail]/Spam']:
-        imap.select(folder) # Select the folder *before* fetching and processing
+        try:
+            imap.select(folder)
+        except imaplib.IMAP4.error as e:
+            print(f"Error selecting folder {folder}: {str(e)}")
+            continue
 
-        # Find unread emails
-        _, message_nums = imap.search(None, 'UNSEEN')
+        try:
+            _, message_nums = imap.search(None, 'UNSEEN')
+        except imaplib.IMAP4.error as e:
+            print(f"Search failed in {folder}: {str(e)}")
+            continue
+
         for num in message_nums[0].split():
-            # Fetch email
-            _, data = imap.fetch(num, '(RFC822)')
-            msg = email.message_from_bytes(data[0][1])
-
-            # Extract email details
+            # Fetch email with retries
+            for attempt in range(3):
+                try:
+                    _, data = imap.fetch(num, '(RFC822)')
+                    msg = email.message_from_bytes(data[0][1])
+                    break
+                except imaplib.IMAP4.abort:
+                    if attempt == 2:
+                        raise
+                    print("IMAP connection lost, reconnecting...")
+                    imap.logout()
+                    imap = imaplib.IMAP4_SSL('imap.gmail.com')
+                    imap.login(email_address, email_password)
+                    imap.select(folder)
+            
+            # Process email
             subject = msg['subject']
             from_ = msg['from']
             body = ''
-
-            sender_email_address = parseaddr(from_)[1] # Get clean email address
-            message_id = msg.get('Message-ID') # Extract Message-ID for threading
-
-            current_history = conversation_history.get(sender_email_address, [])
-            truncated_history = truncate_history(current_history, MAX_HISTORY_LENGTH)
-
-            history_text = ""
-            for turn in truncated_history:
-                role = turn['role']
-                content = turn['content']
-                history_text += f"{role}: {content}\n"
-
-            
+            sender_email = parseaddr(from_)[1]
+            message_id = msg.get('Message-ID')
 
             if msg.is_multipart():
                 for part in msg.walk():
@@ -94,18 +90,18 @@ def main():
             else:
                 body = msg.get_payload(decode=True).decode(errors='ignore')
 
-            # Generate AI response
+            # Generate AI response with conversation history
             prompt = f"From: {from_}\n{body}\n"
-            recipients, content = parse_ai_response(generate_ai_response(prompt, api_key))
-
+            recipients, delay_seconds, content = parse_ai_response(
+                generate_ai_response(prompt, api_key, sender_email)
+            )
 
             if "skip_send" in content.lower() or not from_:
                 imap.store(num, '+FLAGS', '\\Seen')
                 print(f"Skipped reply to {from_}")
                 continue
 
-
-            # User review
+            # User review logic
             if args.review:
                 print(f"\nTo: {recipients}")
                 print(f"Subject: Re: {subject}")
@@ -117,24 +113,118 @@ def main():
                 elif choice == 'edit':
                     content = input("Enter edited content: ")
 
-            # Create and send email message
-            mime_msg = create_email_message("Re:" + subject, recipients, content, sender_email=email_address, in_reply_to_message_id=message_id)
-            send_email(email_address, email_password, mime_msg)
+            # Create and schedule email
+            mime_msg = create_email_message(
+                f"Re: {subject}",
+                recipients,
+                content,
+                sender_email=email_address,
+                in_reply_to_message_id=message_id
+            )
 
-            # Mark as read and cleanup
+            job_id = f"email_{message_id}_{datetime.now().timestamp()}"
+            scheduled_time = datetime.now() + timedelta(seconds=delay_seconds)
+            
+            # Schedule and log email
+            scheduler.add_job(
+                send_email,
+                'date',
+                run_date=scheduled_time,
+                args=[email_address, email_password, mime_msg],
+                id=job_id
+            )
+            log_scheduled_email(job_id, email_address, recipients, content, scheduled_time)
+
+            # Mark as read and store history
             imap.store(num, '+FLAGS', '\\Seen')
-            print(f"Replied to email from {from_}.")
+            conn.execute(
+                "INSERT INTO conversations (sender_email, role, content) VALUES (?, ?, ?)",
+                (sender_email, 'user', f"From: {from_}\nSubject: {subject}\n{body}")
+            )
+            conn.execute(
+                "INSERT INTO conversations (sender_email, role, content) VALUES (?, ?, ?)",
+                (sender_email, 'assistant', f"To: {', '.join(recipients)}\nDelay: {delay_seconds}\n{content}")
+            )
+            conn.commit()
 
-            conversation_history.setdefault(sender_email_address, []).append({'role': 'user', 'content': f"From: {from_}\nSubject: {subject}\n{body}"}) # Add user message to history
-            conversation_history.setdefault(sender_email_address, []).append({'role': 'assistant', 'content': f"To: {', '.join(recipients)}\n{content}" }) # Add assistant response to history
+            print(f"Scheduled response to {from_} in {delay_seconds} seconds")
 
-        imap.close() # Close the selected folder *after* processing all messages in it
-                     # This is now inside the folder loop.
-    imap.logout() # Logout and close the connection *after* processing all folders
 
-    with open(CONVERSATION_HISTORY_FILE, 'w') as f:
-        json.dump(conversation_history, f)
-        # print("Conversation history saved.")
+
+        imap.close()
+    imap.logout()
+    conn.close()
+
+def reschedule_pending_emails(scheduler, email_address_param, email_password_param):
+    """Reschedule pending emails from the database on startup."""
+    print("Rescheduling pending emails...")
+    scheduled_emails = get_scheduled_emails()
+    for scheduled_email in scheduled_emails:
+        job_id = scheduled_email['id']
+        recipients = scheduled_email['recipients'].split(', ')
+        content = scheduled_email['content']
+        scheduled_time = datetime.fromisoformat(scheduled_email['scheduled_time'])
+
+        if scheduled_time > datetime.now():
+            print(f"Rescheduling email job {job_id} for {scheduled_time}")
+            scheduler.add_job(
+                send_email,
+                'date',
+                run_date=scheduled_time,
+                args=[email_address_param, email_password_param, create_email_message(
+                    "Re: [Rescheduled]", # Subject will be overridden by AI response logic, adding a placeholder
+                    recipients,
+                    content,
+                    sender_email=email_address_param
+                )],
+                id=job_id
+            )
+        else:
+            print(f"Scheduled time for job {job_id} is in the past. Sending immediately.")
+            send_email(
+                email_address_param,
+                email_password_param,
+                create_email_message(
+                    "Re: [Past Scheduled Email]",
+                    recipients,
+                    content,
+                    sender_email=email_address_param
+                )
+            )
+
 
 if __name__ == '__main__':
-    main()
+    load_dotenv()
+    
+    # Initialize scheduler and database
+    scheduler = BackgroundScheduler()
+    scheduler.start()
+    init_db()
+    # Get credentials from environment variables or config
+    email_address = os.getenv('EMAIL_ADDRESS') or EMAIL_ADDRESS
+    email_password = os.getenv('EMAIL_PASSWORD') or EMAIL_PASSWORD
+    #reschedule_pending_emails(scheduler, email_address, email_password)
+
+    # Create and start Flask app in a separate thread
+    app = create_app(scheduler)
+    flask_thread = threading.Thread(
+        target=lambda: serve(app, host='0.0.0.0', port=5000),
+        daemon=True
+    )
+    print("Starting Flask app...") # Add print statement
+    flask_thread.start()
+
+    # Schedule email checks every 5 minutes
+    scheduler.add_job(
+        main,
+        'interval',
+        minutes=1,
+        next_run_time=datetime.now()
+    )
+
+    # Keep main thread alive
+    try:
+        while True:
+            time.sleep(1)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown(wait=False)

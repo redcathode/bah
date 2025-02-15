@@ -1,0 +1,21 @@
+---
+// web/src/pages/index.astro
+import Layout from '../layouts/Layout.astro';
+import Conversations from '../components/Conversations.svelte';
+import ScheduledEmails from '../components/ScheduledEmails.svelte';
+---
+
+<Layout title="Dashboard">
+    <div class="dashboard-container">
+        <Conversations client:visible />
+                <ScheduledEmails client:visible />
+    </div>
+</Layout>
+
+<style>
+    .dashboard-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* Two columns layout */
+        gap: 2rem;
+    }
+</style>

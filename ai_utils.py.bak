@@ -1,0 +1,55 @@
+# ai_utils.py
+import openai
+from config import SYSTEM_PROMPT
+from db import truncate_history
+
+def format_conversation_history(sender_email):
+    """Formats conversation history for AI context."""
+    history = truncate_history(sender_email, 12)
+    formatted = "Conversation History:\n\n"
+    
+    for message in history[-12:]:  # Get last 6 messages
+        role = message['role'].upper()
+        content = message['content']
+        formatted += f"{role}:\n{content}\n\n"
+
+    print(formatted)
+    return formatted
+
+def generate_ai_response(prompt, api_key, sender_email):
+    """Generates AI response using OpenAI API with conversation history."""
+    client = openai.OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1"
+    )
+
+    # Get formatted conversation history
+    history = format_conversation_history(sender_email)
+    
+    response = client.chat.completions.create(
+        model="google/gemini-2.0-flash-001",
+        messages=[
+            {"role": "system", "content": f"{SYSTEM_PROMPT}\n{history}"},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    print(response)
+    return response.choices[0].message.content
+
+def parse_ai_response(response_text):
+    """Parses the AI response to extract recipients, delay, and content."""
+    lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+    try:
+        # Extract recipients from first line
+        recipients = [addr.strip() for addr in lines[0].split('To:', 1)[-1].split(',')]
+        
+        # Extract delay from second line
+        delay_seconds = int(lines[1].split('Delay:', 1)[-1].strip())
+        
+        # Combine remaining lines for content
+        content = '\n'.join(lines[2:])
+        
+        return recipients, delay_seconds, content
+    except IndexError:
+        print(response_text)
+        raise ValueError("Invalid response format from API")
