@@ -24,13 +24,13 @@ def load_credentials():
     # Load configuration from .env
     email_address = os.getenv('EMAIL_ADDRESS')
     email_password = os.getenv('EMAIL_PASSWORD')
-    api_key = os.getenv('OPENROUTER_API_KEY')
+    api_key = os.getenv('OPENAI_API_KEY')
 
     # Validate credentials
     missing = []
     if not email_address: missing.append("EMAIL_ADDRESS")
     if not email_password: missing.append("EMAIL_PASSWORD")
-    if not api_key: missing.append("OPENROUTER_API_KEY")
+    if not api_key: missing.append("OPENAI_API_KEY")
 
     if missing:
         raise ValueError(f"Missing configuration for: {', '.join(missing)}")
@@ -84,7 +84,7 @@ def main():
             # Generate PDF attachments
             pdf_paths = []
             for doc in document_descs:
-                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc).message.content)
+                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc))
                 if request_output.strip().startswith("```latex"):
                     request_output = request_output.strip().split("```latex")[1].split("```")[0]
                 pdf_path = latex_utils.create_pdf_from_latex_string(request_output)
@@ -148,7 +148,7 @@ Content:
 {content}
 Document descriptions: {"\n- ".join(document_descs)}""")
             for doc in document_descs:
-                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc).message.content)
+                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc))
                 if request_output.strip().startswith("```latex"):
                     request_output = request_output.strip().split("```latex")[1].split("```")[0]
                 print(latex_utils.create_pdf_from_latex_string(request_output))

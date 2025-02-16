@@ -1,8 +1,16 @@
-from ollama import chat
+import openai
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import config
 import json
+from db import get_history_by_email
+from latex_utils import create_pdf_from_latex_string
+
+client = openai.OpenAI(
+  base_url=config.OPENAI_API_ENDPOINT,
+  api_key=config.OPENAI_API_KEY,
+)
+
 
 class EmailDraft(BaseModel):
     should_skip_sending_email: bool = Field(description="Boolean indicating whether to skip sending an email")
@@ -12,7 +20,7 @@ class EmailDraft(BaseModel):
     descriptions_of_attached_documents: Optional[List[str]] = Field(description="Array of descriptions of attached documents - anything you specify here will be used to generate a document that will then be attached to your email", default_factory=list)
     # descriptions_of_attached_images: Optional[List[str]] = Field(description="Array of descriptions of attached images - anything you specify here will be used to generate an image that will then be attached to your email", default_factory=list)
 
-from db import get_history_by_email
+
 
 def format_conversation_history(sender_email):
     """Formats conversation history for AI context as list of messages."""
@@ -31,7 +39,7 @@ def format_conversation_history(sender_email):
 
 def get_email_draft(sender_email, user_prompt):
     """
-    Makes a request to ollama to generate an email draft with structured output.
+    Makes a request to OpenAI to generate an email draft with structured output.
 
     Args:
         user_prompt: The prompt for generating the email draft.
@@ -39,30 +47,30 @@ def get_email_draft(sender_email, user_prompt):
     Returns:
         EmailDraft: An EmailDraft object containing the structured output.
     """
+    
+
     system_prompt = f"{config.SYSPROMPT_MAIN_STRUCTURED}\n\nHere is the JSON schema to use:\n{EmailDraft.model_json_schema()}\n"
     messages = [
         {"role": "system", "content": system_prompt},
     ]
-    messages.extend(format_conversation_history(sender_email)) # Add history messages
-    messages.append({"role": "user", "content": user_prompt}) # Add current user prompt
+    messages.extend(format_conversation_history(sender_email))  # Add history messages
+    messages.append({"role": "user", "content": user_prompt})  # Add current user prompt
 
-    # print("Full messages payload to API:")
-    # for msg in messages:
-    #     print(f"{msg['role'].upper()}:\n{msg['content']}\n") # Print in original uppercase format for logging clarity
-
-    response = chat(
-        model='baitlm-24b-nonsys', # Or another suitable model
+    response = client.chat.completions.create(
+        model=config.MODEL_NAME,  # Or another suitable model
         messages=messages,
-        format=EmailDraft.model_json_schema(),
+        response_format={"type": "json_object"}
     )
-    
-    email_draft = EmailDraft.model_validate_json(response.message.content)
-    print(json.dumps(json.loads(response.message.content), indent=4))
+
+    email_draft = EmailDraft.model_validate_json(response.choices[0].message.content)
+    print(email_draft)
+    print(json.dumps(json.loads(response.choices[0].message.content), indent=4))
     return email_draft.email_recipients, email_draft.email_delay, email_draft.email_body, email_draft.descriptions_of_attached_documents or [], email_draft.should_skip_sending_email
 
 def generate_document_outline(email_history: str, document_request: str):
-    response = chat(
-        model='baitlm-24b-nonsys', # Or another suitable model
+
+    response = client.chat.completions.create(
+        model=config.MODEL_NAME,  # Or another suitable model
         messages=[
             {
                 'role': 'system',
@@ -75,12 +83,12 @@ def generate_document_outline(email_history: str, document_request: str):
         ]
     )
 
-    return response
+    return response.choices[0].message.content
 
 
 def generate_latex(outline: str):
-    response = chat(
-        model='Jotschi/dolphin-mistral-24b:24b-instruct-q5_0', # Or another suitable model
+    response = client.chat.completions.create(
+        model=config.MODEL_NAME,  # Or another suitable model
         messages=[
             {
                 'role': 'system',
@@ -92,13 +100,13 @@ def generate_latex(outline: str):
             }
         ]
     )
-    return response.message.content
+    return response.choices[0].message.content
 
 if __name__ == "__main__":
-    structured_email = get_email_draft(config.EXAMPLE_EMAIL)
-    print(f"Recipients:{structured_email.email_recipients}\nBody:\n{structured_email.email_body}\nDocument Descriptions: {structured_email.descriptions_of_attached_documents}")
-    for doc in structured_email.descriptions_of_attached_documents or []:
-        request_output = generate_document_outline(config.EXAMPLE_EMAIL + structured_email.email_body, doc).message.content
+    recipients, delay, body, descs, skip = get_email_draft("voodoodoctor@gmail.com", "Hi there\nCould you attach a PDF for me that says, 'hello world'?\nRemember to use the document attachment feature described in your system prompt.")
+    print(f"Recipients:{recipients}\nBody:\n{body}\nDocument Descriptions: {descs}")
+    for doc in descs:
+        request_output = generate_document_outline(config.TEST_FAKE_EMAIL + body, doc)
         print(request_output)
         texout = generate_latex(request_output)
-        print(texout)
+        print(create_pdf_from_latex_string(texout))
