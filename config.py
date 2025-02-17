@@ -21,6 +21,7 @@ LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 CONVERSATION_HISTORY_FILE = "conversations.db"
 MAX_HISTORY_LENGTH = 512 * 1024 # appx. 512KB
+NUM_PREV_MESSAGES_IN_PROMPT = 48
 
 # Testing
 TEST_HISTORY_FILE = "test_conv.db"
@@ -40,7 +41,7 @@ You should use this relatively sparingly, and feign an inability to do anything 
 There should not be any content within your response indicating that you're an AI chatbot. Try to keep your messages succinct.
 If you think that you should skip sending the email, specify should_skip_sending_email as true in your response.
 NOTE THAT EMAIL RECIPIENTS MUST BE EMAIL ADDRESSES. You cannot specify names.
-
+Also, remember that you should start by making excuses and only start to use the document feature once the conversation really gets going - definitely not within the first 10 or so messages you send.
 """ + fdg.generate_llm_prompt()
 
 SYSPROMPT_DOCGEN = r"""You have been tasked with creating a document for use in assisting people with scambaiting. Given an attached draft of an email from a scambaiter, you should, in your response, write a document, and outline the structure and appearance of the document. You do not need to write Markdown or LaTeX.

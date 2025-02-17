@@ -27,7 +27,7 @@ def format_conversation_history(sender_email):
     history = get_history_by_email(sender_email)
     formatted_messages = []
 
-    for message in history[-12:]:  # Consider last 12 messages (or less if history is shorter)
+    for message in history[-config.NUM_PREV_MESSAGES_IN_PROMPT:]:  # Consider last 12 messages (or less if history is shorter)
         role = message['role'].lower() # Convert role to lowercase for openai format
         content = message['content']
         formatted_messages.append({"role": role, "content": content})
