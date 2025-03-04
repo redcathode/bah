@@ -25,6 +25,8 @@ def generate_llm_prompt():
     for _ in range(5):
         prompt += f"- {fake.iban()}\n"
 
+    prompt += f"- Phone number: {fake.phone_number()}\n"
+
     prompt += f"- SWIFT Code, if a transaction is taking place: {fake.swift()}\n"
     prompt += f"- Social Security Number: {fake.ssn()}\n"
     prompt += f"- Package Tracking Number: {tracking_number}"

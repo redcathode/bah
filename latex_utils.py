@@ -25,7 +25,7 @@ def create_pdf_from_latex_string(latex_string):
         tex_file.write(latex_string)
 
     command = [
-        "/home/red/bah2/tectonic",
+        "/var/home/red/projects/bah/tectonic",
         "-X",
         "compile",
         tex_filename,

@@ -1,4 +1,0 @@
-FROM Jotschi/dolphin-mistral-24b:24b-instruct-q5_0
-PARAMETER temperature 0.7
-PARAMETER top_p 0.75
-PARAMETER num_ctx 8192

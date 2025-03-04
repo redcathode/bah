@@ -72,7 +72,7 @@ def main():
 
             # Generate AI response with conversation history
             prompt = f"From: {from_}\n{body}\n"
-            recipients, delay_seconds, content, document_descs, skip = llmgen.get_email_draft(sender_email, prompt)
+            recipients, delay_seconds, content, skip = llmgen.get_email_draft(sender_email, prompt)
             
             if skip:
                 imap.store(num, '+FLAGS', '\\Seen')
@@ -82,19 +82,19 @@ def main():
             # recipients, delay_seconds, content = ai_utils.parse_ai_response(ai_response)
             # Create and schedule email
             # Generate PDF attachments
-            pdf_paths = []
-            for doc in document_descs:
-                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc))
-                if request_output.strip().startswith("```latex"):
-                    request_output = request_output.strip().split("```latex")[1].split("```")[0]
-                pdf_path = latex_utils.create_pdf_from_latex_string(request_output)
-                pdf_paths.append(pdf_path)
+            # pdf_paths = []
+            # for doc in document_descs:
+            #     request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc))
+            #     if request_output.strip().startswith("```latex"):
+            #         request_output = request_output.strip().split("```latex")[1].split("```")[0]
+            #     pdf_path = latex_utils.create_pdf_from_latex_string(request_output)
+            #     pdf_paths.append(pdf_path)
 
             mime_msg = email_utils.create_email_message(
                 f"Re: {subject}",
                 recipients,
                 content,
-                pdf_paths=pdf_paths,
+                # pdf_paths=pdf_paths,
                 sender_email=email_address,
                 in_reply_to_message_id=message_id
             )
@@ -140,18 +140,17 @@ if __name__ == '__main__':
                 break
 
             prompt = f"From: terminal_user\n{user_input}\n"
-            recipients, delay_seconds, content, document_descs, skip = llmgen.get_email_draft(sender_email, prompt)
+            recipients, delay_seconds, content, skip = llmgen.get_email_draft(sender_email, prompt)
             print(f"""Skip: {skip}
 Recipients: {", ".join(recipients)}
 Delay: {delay_seconds}
 Content:
-{content}
-Document descriptions: {"\n- ".join(document_descs)}""")
-            for doc in document_descs:
-                request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc))
-                if request_output.strip().startswith("```latex"):
-                    request_output = request_output.strip().split("```latex")[1].split("```")[0]
-                print(latex_utils.create_pdf_from_latex_string(request_output))
+{content}""")
+            # for doc in document_descs:
+            #     request_output = llmgen.generate_latex(llmgen.generate_document_outline(content, doc))
+            #     if request_output.strip().startswith("```latex"):
+            #         request_output = request_output.strip().split("```latex")[1].split("```")[0]
+            #     print(latex_utils.create_pdf_from_latex_string(request_output))
             # Log conversation in test DB
             db.log_conversation(conn, sender_email, "terminal_user", "Terminal Input", user_input, [], 0, content)
 

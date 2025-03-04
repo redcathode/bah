@@ -1,0 +1,13 @@
+[project]
+name = "bah"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "apscheduler>=3.11.0",
+    "faker>=36.1.1",
+    "openai>=1.63.2",
+    "python-dotenv>=1.0.1",
+    "waitress>=3.0.2",
+]
